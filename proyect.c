@@ -5,7 +5,7 @@
 #include <string.h>
 
 // Precisión o diferencia requerida
-double ERR = 0.00001;
+#define ERR 0.00001
 // C constant
 #define C_CONSTANT 0.5
 // Número de intervalos discretos 10ˆ5
@@ -13,7 +13,7 @@ double ERR = 0.00001;
 // Length
 #define L 10.0f
 // Intervals
-int N = 2000;
+#define N 5000
 
 // Delta t, x
 double DT, DX;
@@ -23,7 +23,7 @@ double maxFromArray(double *data)
 {
     double max = 0;
     int i;
-    for (i = 1; i < N; i++)
+    for (i = 1; i < N - 1; i++)
     {
         if (max < data[i])
         {
@@ -37,8 +37,6 @@ void resolveInitialValues()
 {
     DX = L / N;
     DT = (C_CONSTANT * pow(DX, 2)) / DIFUSIVE_VAL;
-    // MIN_EVALUATIONS = N / 2;
-    // MIN_EVALUATIONS = 1;
 }
 
 int main(int argc, char *argv[])
@@ -48,23 +46,27 @@ int main(int argc, char *argv[])
 
     T = DT * N;
 
-    // Temperatures array
-    double t0 = 60.0f;
-    double tl = 100.0f;
-    double tr = 40.0f;
+    double t0 = 60.0;
+    double tl = 100.0;
+    double tr = 40.0;
+    if (argc > 3)
+    {
+        t0 = strtod(argv[1], NULL);
+        tl = strtod(argv[2], NULL);
+        tr = strtod(argv[3], NULL);
+    }
     // x initial temps
 
-    double temperatures1[N + 1];
-    double temperatures2[N + 1];
-    double differences[N + 1];
+    double temperatures1[N];
+    double temperatures2[N];
+    double differences[N];
     // Set left
     temperatures1[0] = temperatures2[0] = tl;
     // Set right
-    temperatures1[N] = temperatures2[N] = tr;
+    temperatures1[N - 1] = temperatures2[N - 1] = tr;
     // Set initial temperatures1 excluding the left and right one
     // double evaluation = 0;
-
-    for (int i = 1; i < N; i++)
+    for (int i = 1; i < N - 1; i++)
     {
         temperatures1[i] = t0;
     }
@@ -73,7 +75,7 @@ int main(int argc, char *argv[])
     while (max > ERR)
     {
         // i stands for the current x partition in our l bar
-        for (int i = 1; i < N; i++)
+        for (int i = 1; i < N - 1; i++)
         {
             temperatures2[i] = temperatures1[i] + C_CONSTANT * (temperatures1[i - 1] - 2 * temperatures1[i] + temperatures1[i + 1]);
             differences[i] = fabs(temperatures2[i] - temperatures1[i]);
@@ -97,7 +99,7 @@ int main(int argc, char *argv[])
     printf("In position %d value %f\n", (N / 5) * 2, temperatures1[(N / 5) * 2]);
     printf("In position %d value %f\n", (N / 5) * 3, temperatures1[(N / 5) * 3]);
     printf("In position %d value %f\n", (N / 5) * 4, temperatures1[(N / 5) * 4]);
-    printf("In position %d value %f\n", (N / 5) * 5, temperatures1[(N / 5) * 5]);
+    printf("In position %d value %f\n", (((N / 5) * 5) - 1), temperatures1[((N / 5) * 5) - 1]);
     printf("In position %d value %f\n", N / 2, temperatures1[N / 2]);
 
     return 0;

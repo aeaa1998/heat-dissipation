@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <iostream>
-#include <chrono>
-#include <algorithm>
 #include <omp.h>
 
 // Precisión o diferencia requerida
@@ -84,7 +81,7 @@ int main(int argc, char *argv[])
         for (j = 1; j < N; j++)
         {
             temperatures2[j] = temperatures1[j] + C_CONSTANT * (temperatures1[j - 1] - 2 * temperatures1[j] + temperatures1[j + 1]);
-            differences[j] = temperatures2[j] - temperatures1[j];
+            differences[j] = fabs(temperatures2[j] - temperatures1[j]);
         }
 
 #pragma omp parallel for

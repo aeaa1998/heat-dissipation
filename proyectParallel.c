@@ -6,7 +6,7 @@
 #include <string.h>
 
 // Precisión o diferencia requerida
-double ERR = 0.00001;
+#define ERR 0.00001
 
 // C constant
 #define C_CONSTANT 0.5
@@ -15,24 +15,24 @@ double ERR = 0.00001;
 // Length
 #define L 10.0
 // Intervals
-int N = 2000;
-
+#define N 5000
 // Delta t, x
 double DT, DX;
 int T;
 
-double maxFromArray(double *data)
+double maxFromArray(double data[], int start, int end)
 {
-    double max = 0;
+    double inner_max = 0;
     int i;
-    for (i = 1; i < N; i++)
+
+    for (i = start; i < end; i++)
     {
-        if (max < data[i])
+        if (inner_max < data[i])
         {
-            max = data[i];
+            inner_max = data[i];
         }
     }
-    return max;
+    return inner_max;
 }
 
 void resolveInitialValues()
@@ -41,55 +41,98 @@ void resolveInitialValues()
     DT = (C_CONSTANT * pow(DX, 2)) / DIFUSIVE_VAL;
 }
 
+void sendTask(int start, int end, int num_threads, double temperatures2[], double temperatures1[], double diff[])
+{
+    double max = 0;
+
+    // #pragma omp task
+    // printf("Task %d started with %d ended with %d\n", tid, start, end);
+    for (int j = start; j < end; j++)
+    {
+        // if (j == end - 1)
+        // {
+        //     printf("here %d \n", j);
+        // }
+        temperatures2[j] = temperatures1[j] + C_CONSTANT * (temperatures1[j - 1] - 2 * temperatures1[j] + temperatures1[j + 1]);
+        diff[j] = fabs(temperatures2[j] - temperatures1[j]);
+    }
+}
+
 int main(int argc, char *argv[])
 {
 
     resolveInitialValues();
 
     T = DT * N;
-
-    // Temperatures array
     double t0 = 60.0;
     double tl = 100.0;
     double tr = 40.0;
+    int num_threads = 2;
+    if (argc > 4)
+    {
+        num_threads = strtol(argv[1], NULL, 10);
+        t0 = strtod(argv[2], NULL);
+        tl = strtod(argv[3], NULL);
+        tr = strtod(argv[4], NULL);
+    }
+
     // x initial temps
-    double temperatures1[N + 1];
-    double temperatures2[N + 1];
-    double differences[N + 1];
+    double temperatures1[N];
+    double temperatures2[N];
 
     // Set left
-    temperatures1[0] = temperatures2[0] = tl;
+    temperatures1[0] = tl;
+    temperatures2[0] = tl;
     // Set right
-    temperatures1[N] = temperatures2[N] = tr;
+    temperatures1[N - 1] = tr;
+    temperatures2[N - 1] = tr;
 
-    for (int i = 1; i < N; i++)
+    for (int i = 1; i < N - 1; i++)
     {
         temperatures1[i] = t0;
     }
+
     double start_time = omp_get_wtime();
     double max = 1;
     double new_max;
-    // omp_set_dynamic(0);
-    // omp_set_nested(1);
-#pragma omp parallel num_threads(6) shared(N, temperatures2, temperatures1, differences, max, new_max, ERR)
-    while (max > ERR)
-    {
-
-#pragma omp num_threads(6) for schedule(static)
-        for (int j = 1; j < N; j++)
-        {
-            temperatures2[j] = temperatures1[j] + C_CONSTANT * (temperatures1[j - 1] - 2 * temperatures1[j] + temperatures1[j + 1]);
-            differences[j] = fabs(temperatures2[j] - temperatures1[j]);
-        }
+    int m;
+    int block = ceil((float)(N - 2) / (float)(num_threads));
+    double differences[N];
+    double differences_pt[num_threads];
+    // printf("B size: %d", block);
+    omp_set_num_threads(num_threads);
+#pragma omp parallel shared(temperatures2, temperatures1, differences, max, new_max, block, num_threads, m, differences_pt)
 #pragma omp single
+    {
+        while (max > ERR)
         {
+            // Al threads create just one part of the block
+            for (m = 0; m < num_threads; m++)
+            {
+#pragma omp task shared(temperatures2, temperatures1, differences, block, num_threads, m, differences_pt)
+                {
+                    // int tid = omp_get_thread_num();
+                    int start = m * block + 1;
+                    int end = start + (block - ((N - 2) % block));
+                    sendTask(start, end, num_threads, temperatures2, temperatures1, differences);
+                    differences_pt[m] = maxFromArray(differences, start, end);
+                }
+                // printf("T%d done\n", tid);
+            }
+#pragma omp taskwait
+
+            // printf("T%d started\n", 1);
+            // TODO check how to make this parallell
+            double new_max = maxFromArray(differences_pt, 0, num_threads);
+            // printf("all done\n");
             memcpy(temperatures1, temperatures2, sizeof(temperatures1));
-            double new_max = maxFromArray(differences);
+            // printf("Nuevo mayor: %lf\n", new_max);
             if (new_max < ERR)
             {
                 max = new_max;
             }
         }
+        // printf("T%d unlocking\n", 1);
     }
 
     double elapsed_time_ms = omp_get_wtime() - start_time;
@@ -100,7 +143,7 @@ int main(int argc, char *argv[])
     printf("In position %d value %f\n", (N / 5) * 2, temperatures1[(N / 5) * 2]);
     printf("In position %d value %f\n", (N / 5) * 3, temperatures1[(N / 5) * 3]);
     printf("In position %d value %f\n", (N / 5) * 4, temperatures1[(N / 5) * 4]);
-    printf("In position %d value %f\n", (N / 5) * 5, temperatures1[(N / 5) * 5]);
+    printf("In position %d value %f\n", ((N / 5) * 5) - 1, temperatures1[((N / 5) * 5) - 1]);
     printf("In position %d value %f\n", N / 2, temperatures1[N / 2]);
     return 0;
 }
